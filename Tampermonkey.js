@@ -9,69 +9,50 @@
 // @grant        none
 // ==/UserScript==
 
-class TinkoffParser
+// #region practice
+
+class TinkoffHeader
 {
-	constructor()
+	/** @param {HTMLDivElement} tag_header */
+	constructor(tag_header)
 	{
-		this.task = this.getTaskElement();
-		this.title = this.getTaskTitle();
-		this.points = this.getTaskPoints();
-		this.limits = new TinkoffLimits(this.task);
-		this.question = new TinkoffQuestion(this.task);
-		this.examples = new TinkoffExamples(this.task);
-	}
+		this.tag_header = tag_header;
 
-	getTaskElement ()
-	{
-		return document.querySelector('app-practice-task');
-	}
+		this.tag_title = tag_header.querySelector('.tui-text_body-xl');
+		this.tag_points = tag_header.querySelector('tui-badge[data-appearance="info"]');
 
-	getTaskTitle ()
-	{
-		const titleEl = this.task.querySelector('.header-task .tui-text_body-xl');
-		return titleEl ? titleEl.textContent.trim() : 'Задание';
-	}
-
-	getTaskPoints ()
-	{
-		const badge = this.task.querySelector('tui-badge[data-appearance="info"]');
-		return badge ? badge.textContent.trim() : '';
+		this.title = this.tag_title?.textContent.trim();
+		this.points = this.tag_points?.textContent.trim();
 	}
 }
 
 class TinkoffLimits
 {
-	constructor(task)
+	/** @param {HTMLElement} tag_limits */
+	constructor(tag_limits)
 	{
-		this.task = task;
-		this.tag = task.querySelector('app-limitation-program-task');
+		this.tag_limits = tag_limits;
 	}
 
-	parse ()
+	serializeToJSON ()
 	{
-		if (!this.tag)
-		{
-			return '';
-		}
+		const items = [...this.tag_limits.querySelectorAll('.item')];
 
-		const items = this.tag.querySelectorAll('.item');
-		const limits = [];
-
-		items.forEach(item =>
-		{
-			const title = item.querySelector('.title').textContent.trim();
-			const value = item.querySelector('.description').textContent.trim();
-			limits.push(`+ ${title}: ${value}`);
-		});
-
-		return limits.join('\n');
+		return items.map(item => ({
+			title: item.querySelector('.title').textContent.trim(),
+			value: item.querySelector('.description').textContent.trim()
+		}));
 	}
 }
 
 class TinkoffQuestion
 {
-	constructor(task)
+	/** @param {HTMLElement} tag_question */
+	constructor(tag_question)
 	{
+		this.tag_question = tag_question;
+		this.tag_editor = tag_question.querySelector('.ql-editor');
+
 		/** @type { { title: string, getText ?: (text: string) => string }[] } */
 		this.sections = [
 			{
@@ -94,22 +75,11 @@ class TinkoffQuestion
 		];
 
 		this.parser = new DOMParser();
-		this.task = task;
-		this.tag = task.querySelector('app-quill-content-display');
-		this.editor = this.tag?.querySelector('.ql-editor');
 	}
 
-	parse ()
+	get html ()
 	{
-		if (!this.editor)
-		{
-			return {
-				content: '',
-				sections: {}
-			};
-		}
-
-		const tagClone = this.parser.parseFromString(this.editor.innerHTML, 'text/html').body;
+		const tagClone = this.parser.parseFromString(this.tag_editor.innerHTML, 'text/html').body;
 
 		// Заменить формулы на обычный текст
 		tagClone.querySelectorAll('span.ql-formula').forEach(formula =>
@@ -127,7 +97,7 @@ class TinkoffQuestion
 			.replaceAll(/\s*\\times\s*/g, ' * ')
 			.replaceAll(/\s*\\leq\s*/g, ' <= ');
 
-		return this.splitSections(text);
+		return text;
 	}
 
 	splitSections (content)
@@ -163,134 +133,142 @@ class TinkoffQuestion
 			sections: response
 		};
 	}
+
+	serializeToJSON ()
+	{
+		return this.splitSections(this.html);
+	}
 }
 
 class TinkoffExamples
 {
-	constructor(task)
+	/** @param {HTMLElement} tag_examples */
+	constructor(tag_examples)
 	{
-		this.task = task;
-		this.tag = task.querySelector('app-samples-program-task');
+		this.tag_examples = tag_examples;
 	}
 
-	parse ()
+	serializeToJSON ()
 	{
-		if (!this.tag)
+		/** @type {HTMLDivElement[]} */
+		const titles = [...this.tag_examples.querySelectorAll('div.subtitle')];
+
+		return titles.map(function (tag_title)
 		{
-			return [];
-		}
+			const title = tag_title.textContent.trim();
 
-		const examples = [];
-		const exampleSections = this.tag.querySelectorAll('.subtitle.ng-star-inserted');
+			const tag_example = tag_title.nextElementSibling;
 
-		exampleSections.forEach(section =>
-		{
-			const title = section.textContent.trim();
-			const container = section.nextElementSibling;
+			const tag_input = tag_example.firstElementChild.querySelector('textarea');
+			const tag_output = tag_example.lastElementChild.querySelector('textarea');
 
-			if (container)
-			{
-				const inputArea = container.querySelector('.sample-field:first-child textarea');
-				const outputArea = container.querySelector('.sample-field:last-child textarea');
-
-				if (inputArea && outputArea)
-				{
-					examples.push({
-						title,
-						input: inputArea.value.trim(),
-						output: outputArea.value.trim()
-					});
-				}
-			}
+			return {
+				title,
+				input: tag_input.value.trim(),
+				output: tag_output.value.trim()
+			};
 		});
-
-		return examples;
 	}
 }
 
-class MarkdownFormatter
+class TinkoffTask
 {
-	constructor(parser)
+	/** @param {HTMLElement} tag_task */
+	constructor(tag_task)
 	{
-		this.parser = parser;
+		this.tag_task = tag_task;
+
+		this.tag_header = tag_task.querySelector('div.header-task');
+		this.tag_limits = tag_task.querySelector('app-limitation-program-task');
+		this.tag_question = tag_task.querySelector('app-quill-content-display');
+		this.tag_examples = tag_task.querySelector('app-samples-program-task');
+
+		this.header = this.tag_header instanceof HTMLDivElement
+			? new TinkoffHeader(this.tag_header)
+			: null;
+
+		this.question = this.tag_question instanceof HTMLElement
+			? new TinkoffQuestion(this.tag_question)
+			: null;
+
+		this.limits = this.tag_limits instanceof HTMLElement
+			? new TinkoffLimits(this.tag_limits)
+			: null;
+
+		this.examples = this.tag_examples instanceof HTMLElement
+			? new TinkoffExamples(this.tag_examples)
+			: null;
 	}
+}
 
-	format ()
+// #endregion practice
+// ===== ===== ===== ===== =====
+// #region practice ui
+
+/** @param {TinkoffTask} task */
+function convertToMarkdown (task)
+{
+	let response = '';
+
+	const title = [task.header.title, task.header.points].join(' | ');
+	response += `# ${title}\n\n`;
+
+	const limits = task.limits?.serializeToJSON();
+	if (limits)
 	{
-		const title = `# ${this.parser.title} ${this.parser.points ? `(${this.parser.points})` : ''}`;
-		const limits = this.parser.limits.parse();
-		const question = this.parser.question.parse();
-		const examples = this.parser.examples.parse();
+		response += `## Ограничения\n\n`;
 
-		let md = `${title}\n\n`;
-
-		if (limits)
+		for (const limit of limits)
 		{
-			md += `## Ограничения\n\n${limits}\n\n`;
+			response += `+ ${limit.title}: ${limit.value}\n`;
 		}
 
-		// Добавляем секции
-		const sections = [
-			{ title: 'Вопрос', key: 'Вопрос' },
-			{ title: 'Формат входных данных', key: 'Формат входных данных' },
-			{ title: 'Формат выходных данных', key: 'Формат выходных данных' },
-			{ title: 'Замечание', key: 'Замечание' }
-		];
+		response += '\n';
+	}
 
-		sections.forEach(section =>
+	const question = task.question?.serializeToJSON();
+	if (question)
+	{
+		for (const section of task.question.sections)
 		{
-			if (question.sections[section.key])
+			const data = question.sections[section.title];
+
+			if (data)
 			{
-				md += `## ${section.title}\n\n${question.sections[section.key]}\n\n`;
+				response += `## ${section.title}\n\n${data}\n\n`;
 			}
-		});
-
-		if (examples.length > 0)
-		{
-			md += `## Примеры данных\n\n`;
-			examples.forEach((ex, i) =>
-			{
-				md += `### Пример ${i + 1}\n\n`;
-				md += `Вход:\n\n\`\`\`\n${ex.input}\n\`\`\`\n\n`;
-				md += `Выход:\n\n\`\`\`\n${ex.output}\n\`\`\`\n\n`;
-			});
 		}
-
-		return md.trim();
 	}
+
+	const examples = task.examples?.serializeToJSON();
+	if (examples)
+	{
+		response += '## Примеры данных\n\n';
+
+		for (const example of examples)
+		{
+			response += `### ${example.title}\n\n`;
+			response += `Вход:\n\n\`\`\`\n${example.input}\n\`\`\`\n\n`;
+			response += `Выход:\n\n\`\`\`\n${example.output}\n\`\`\`\n\n`;
+		}
+	}
+
+	return response.trim();
 }
 
 class TinkoffUI
 {
-	constructor()
+	/** @param {TinkoffTask} task */
+	constructor(task)
 	{
-		this.parser = null;
-		this.init();
+		this.task = task;
+
+		this.tag_icon = this.getImportButton();
+		task.tag_header?.prepend(this.tag_icon);
 	}
 
-	init ()
+	getImportButton ()
 	{
-		try
-		{
-			this.parser = new TinkoffParser();
-			this.addCopyButton();
-		}
-		catch (error)
-		{
-			console.log('Tinkoff Education Copier: waiting for page load...');
-			setTimeout(() => this.init(), 1000);
-		}
-	}
-
-	addCopyButton ()
-	{
-		const header = this.parser.task.querySelector('.header-task');
-
-		if (!header)
-		{
-			return;
-		}
-
 		const button = document.createElement('button');
 		button.innerHTML = '📋 Копировать задание';
 		button.style.cssText = `
@@ -307,8 +285,7 @@ class TinkoffUI
 
 		button.addEventListener('click', () =>
 		{
-			const formatter = new MarkdownFormatter(this.parser);
-			const markdown = formatter.format();
+			const markdown = convertToMarkdown(this.task);
 
 			if (this.copyToClipboard(markdown))
 			{
@@ -322,7 +299,7 @@ class TinkoffUI
 			}
 		});
 
-		header.appendChild(button);
+		return button;
 	}
 
 	copyToClipboard (text)
@@ -363,8 +340,36 @@ class TinkoffUI
 	}
 }
 
-// Инициализация
-window.addEventListener('load', () =>
+function initializePractice ()
 {
-	window.tinkoff_education = new TinkoffUI();
-});
+	const tag_task = document.querySelector('app-practice-task');
+
+	if (tag_task instanceof HTMLElement)
+	{
+		const task = new TinkoffTask(tag_task);
+		const ui = new TinkoffUI(task);
+
+		return ui;
+	}
+
+	return null;
+}
+
+// #endregion practice ui
+
+function initialize ()
+{
+	const handler = initializePractice();
+
+	if (handler)
+	{
+		console.debug('tinkoff_education_extension', handler);
+		window.tinkoff_education_extension = handler;
+		return;
+	}
+
+	console.debug('tinkoff_education_extension', 're-initialize in 1 second');
+	setTimeout(initialize, 1_000);
+}
+
+window.addEventListener('load', initialize);
