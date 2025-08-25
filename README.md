@@ -19,14 +19,56 @@
 + Ручное копирование содержимого:
 
 ```javascript
-let buffer = document.createElement('textarea');
-buffer.value = $0.innerText;
+window.tinkoff_task = new class TinkoffTask
+{
+	get html ()
+	{
+		return document.querySelector('app-practice-task').outerHTML;
+	}
 
-document.body.appendChild(buffer);
-buffer.select();
+	get text ()
+	{
+		const parser = new DOMParser();
+		const cloned = parser.parseFromString(this.html, 'text/html').body.firstElementChild;
 
-console.log(document.execCommand('copy') ? 'COPIED' : 'FAILED TO SEND TO CLIPBOARD');
+		// заменить формулы на текст.
+		for (const tag_formula of cloned.querySelectorAll('span.ql-formula'))
+		{
+			tag_formula.textContent = tag_formula.getAttribute('data-value');
+		}
 
-document.body.removeChild(buffer);
-delete buffer;
+		// для удобного просмотра.
+		for (const tag_paragraph of cloned.querySelectorAll('p'))
+		{
+			tag_paragraph.textContent += '\n';
+		}
+
+		return cloned.textContent;
+	}
+
+	copyToClipboard (text)
+	{
+		const tag_textarea = document.createElement('textarea');
+		tag_textarea.value = text;
+
+		document.body.appendChild(tag_textarea);
+		tag_textarea.select();
+
+		const status = document.execCommand('copy');
+		tag_textarea.remove();
+
+		return status;
+	}
+
+	constructor ()
+	{
+		this.has_copied = this.copyToClipboard(this.text);
+
+		this.message = this.has_copied
+			? 'COPIED'
+			: 'FAILED TO SEND TO CLIPBOARD';
+
+		console.debug(this.message);
+	}
+};
 ```
