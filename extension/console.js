@@ -24,6 +24,8 @@ window.tinkoff_practice = new class TinkoffPractice
 		return cloned.textContent
 			.replace(/\u00A0/g, ' ') // Неразрывный пробел
 			.replace(/\s*\\leq\s*/g, ' <= ')
+			.replace(/\s*\\ne\s*/g, ' != ')
+			.replace(/\s*\\to\s*/g, ' => ')
 			.replace(/\s*\\times\s*/g, ' * ');
 	}
 
