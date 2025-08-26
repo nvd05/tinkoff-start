@@ -79,5 +79,14 @@ function getMarkdown (sections)
 		}
 	}
 
+	const unprocessed = sections.unprocessed;
+	if (unprocessed)
+	{
+		lines.push('## Необработанный текст');
+		lines.push('');
+		lines.push(unprocessed);
+		lines.push('');
+	}
+
 	return lines.join('\n');
 }

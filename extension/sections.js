@@ -48,7 +48,9 @@ const sections = [
 
 function getSections (text)
 {
-	const responses = {};
+	const responses = {
+		unprocessed: null
+	};
 
 	for (const section of sections)
 	{
@@ -60,8 +62,10 @@ function getSections (text)
 		}
 
 		responses[section.title] = response[1].trim();
-		text = text.substring(0, response.index);
+		text = text.substring(0, response.index).trim();
 	}
+
+	responses.unprocessed = text;
 
 	return responses;
 }
