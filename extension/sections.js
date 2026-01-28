@@ -5,7 +5,7 @@
 /** @typedef { 'unprocessed' | TinkoffHeaderKeys | TinkoffContentKeys | TinkoffFooterKeys } TinkoffSectionKeys */
 
 /** @type { { regex: RegExp, title: string, key: TinkoffSectionKeys }[] } */
-const sections = [
+const SECTIONS_TEMPLATE = [
 	{
 		regex: /Предыдущие решения(.*)$/s,
 		title: 'Предыдущие решения',
@@ -68,7 +68,7 @@ function getSections (text)
 	/** @type { Partial<Record<TinkoffSectionKeys, Record<'title' | 'value', string>>> } */
 	const responses = {};
 
-	for (const section of sections)
+	for (const section of SECTIONS_TEMPLATE)
 	{
 		const response = section.regex.exec(text);
 
