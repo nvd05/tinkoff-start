@@ -1,30 +1,59 @@
 ﻿
 def task_5(n: int, m: int, v: list[int], h: list[int]) -> int:
-	# Минимальное расстояние
-	dist = (n - 1) + (m - 1)
+	if n == 1 and m == 1:
+		return 0
 
-	# 1. Считаем базовый кратчайший путь
-	# Можно либо пройти через лучшую строку i, либо через лучший столбец j
+	# Построение нижней выпуклой оболочки для точек (j, h[j])
+	# j - координата x (от 0 до m-1), h[j] - координата y
+	hull = []
+	for j in range(m):
+		while len(hull) >= 2:
+			j1, j2 = hull[-2], hull[-1]
+			# Проверка поворота (векторное произведение) для выпуклости
+			if (h[j2] - h[j1]) * (j - j2) >= (h[j] - h[j2]) * (j2 - j1):
+				hull.pop()
+			else:
+				break
+		hull.append(j)
 
-	# Вариант А: идем по столбцу 1 до строки i, там всю горизонталь, потом по столбцу M до конца
-	# Стоимость = (i-1)*H[0] + (m-1)*V[i-1] + (n-i)*H[m-1]
-	res_v = float('inf')
-	for i in range(1, n + 1):
-		cost = (i - 1) * h[0] + (m - 1) * v[i - 1] + (n - i) * h[m - 1]
-		if cost < res_v:
-			res_v = cost
+	def get_slope_cmp(idx, i_val):
+		"""Сравнение наклона ребра оболочки с целевым наклоном."""
+		j1, j2 = hull[idx], hull[idx+1]
+		# Условие: slope(j1, j2) >= (v[i] - v[0]) / i
+		return (h[j2] - h[j1]) * i_val >= (v[i_val] - v[0]) * (j2 - j1)
 
-	# Вариант Б: идем по строке 1 до столбца j, там всю вертикаль, потом по строке N до конца
-	# Стоимость = (j-1)*V[0] + (n-1)*H[j-1] + (m-j)*V[n-1]
-	res_h = float('inf')
-	for j in range(1, m + 1):
-		cost = (j - 1) * v[0] + (n - 1) * h[j - 1] + (m - j) * v[n - 1]
-		if cost < res_h:
-			res_h = cost
+	min_total_cost = float('inf')
 
-	min_base = min(res_v, res_h)
+	# Перебираем все возможные "магистральные" строки i
+	for i in range(n):
+		if i == 0:
+			# Путь по границам: (1,1) -> (1,m) -> (n,m)
+			current_cost = (m - 1) * v[0] + (n - 1) * h[m - 1]
+		else:
+			# Ищем оптимальный столбец j на выпуклой оболочке бинарным поиском
+			low = 0
+			high = len(hull) - 2
+			best_idx = len(hull) - 1
 
-	return min_base
+			while low <= high:
+				mid = (low + high) // 2
+				if get_slope_cmp(mid, i):
+					best_idx = mid
+					high = mid - 1
+				else:
+					low = mid + 1
+
+			j_opt = hull[best_idx]
+			# Вычисление стоимости по формуле (используем 0-индексацию)
+			current_cost = (j_opt * v[0] +
+							(m - 1 - j_opt) * v[i] +
+							i * h[j_opt] +
+							(n - 1 - i) * h[m - 1])
+
+		if current_cost < min_total_cost:
+			min_total_cost = current_cost
+
+	return int(min_total_cost)
 
 if __name__ == "__main__":
 	n, m = list(map(int, input().split()))
